@@ -1,0 +1,31 @@
+[package]
+name = "cerberus"
+version = "0.1.0"
+edition = "2021"
+authors = ["Cerberus Team"]
+description = "Cloud-to-SSD virtual storage for Windows games"
+repository = "https://github.com/Znackt/Cerberus"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+anyhow = "1.0"
+thiserror = "1.0"
+tempfile = "3.10"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
+winapi = { version = "0.3", features = ["winbase", "minwindef", "errhandlingapi"] }
+tokio = { version = "1.0", features = ["sync", "macros", "rt-multi-thread"] }
+
+# GUI framework (eframe/wgpu) - selected for Rust-native UI
+# Note: Using slightly older stable versions for compatibility
+eframe = { version = "0.27", features = ["wgpu"] }
+egui = "0.27"
+
+[build-dependencies]
+embed-resource = "2.4"

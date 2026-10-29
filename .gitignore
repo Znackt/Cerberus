@@ -1,0 +1,14 @@
+/target/
+/dist/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.bak
+*.backup
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
