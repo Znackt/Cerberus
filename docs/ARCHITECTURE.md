@@ -30,7 +30,7 @@ flowchart LR
     Store --> File[(settings.json)]
     Main --> Window[MainWindow]
     Window --> Views[Dashboard / Settings / Diagnostics]
-    Views -->|commands and results| Service
+    Views -->[commands and results] Service
     Service --> State[Shared AppState]
     State --> Views
 ```
