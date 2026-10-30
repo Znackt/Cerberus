@@ -19,7 +19,7 @@ tempfile = "3.10"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
-winapi = { version = "0.3", features = ["winbase", "minwindef", "errhandlingapi"] }
+winapi = { version = "0.3", features = ["winbase", "minwindef", "errhandlingapi", "winnt", "winreg"] }
 tokio = { version = "1.0", features = ["sync", "macros", "rt-multi-thread"] }
 
 # GUI framework (eframe/wgpu) - selected for Rust-native UI

@@ -30,6 +30,22 @@ pub enum CerberusError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    /// rclone not found
+    #[error("rclone not found. Please install rclone from https://rclone.org/downloads/")]
+    RcloneNotFound,
+
+    /// rclone error
+    #[error("rclone error: {0}")]
+    RcloneError(String),
+
+    /// WinFsp not found
+    #[error("WinFsp not found. Install from https://winfsp.dev/")]
+    WinFspNotFound,
+
+    /// Mount error
+    #[error("Mount error: {0}")]
+    MountError(String),
+
     /// Generic error.
     #[error("{0}")]
     Other(String),
@@ -54,6 +70,26 @@ impl CerberusError {
     /// Create a config error.
     pub fn config<S: Into<String>>(msg: S) -> Self {
         Self::Config(msg.into())
+    }
+
+    /// Create rclone not found error
+    pub fn rclone_not_found() -> Self {
+        Self::RcloneNotFound
+    }
+
+    /// Create rclone error
+    pub fn rclone_error<S: Into<String>>(msg: S) -> Self {
+        Self::RcloneError(msg.into())
+    }
+
+    /// Create WinFsp not found error
+    pub fn winfsp_not_found() -> Self {
+        Self::WinFspNotFound
+    }
+
+    /// Create mount error
+    pub fn mount_error<S: Into<String>>(msg: S) -> Self {
+        Self::MountError(msg.into())
     }
 }
 

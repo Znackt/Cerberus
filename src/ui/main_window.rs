@@ -1,5 +1,5 @@
 use crate::app::service::AppService;
-use crate::ui::views::{DashboardView, DiagnosticsView, SettingsView};
+use crate::ui::views::{CloudDrivesView, DashboardView, DiagnosticsView, SettingsView};
 use egui::{
     Align, CentralPanel, Color32, Context, Layout, RichText, ScrollArea, SidePanel, Ui, Vec2,
     Visuals,
@@ -35,6 +35,7 @@ pub struct MainWindow {
     app_service: AppService,
     current_view: NavigationView,
     dashboard_view: DashboardView,
+    cloud_drives_view: CloudDrivesView,
     settings_view: SettingsView,
     diagnostics_view: DiagnosticsView,
 }
@@ -50,6 +51,7 @@ impl MainWindow {
             app_service: app_service.clone(),
             current_view: NavigationView::Dashboard,
             dashboard_view: DashboardView::new(&app_service),
+            cloud_drives_view: CloudDrivesView::new(&app_service),
             settings_view: SettingsView::new(&app_service),
             diagnostics_view: DiagnosticsView::new(&app_service),
         }
@@ -77,6 +79,12 @@ impl MainWindow {
 }
 
 impl eframe::App for MainWindow {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if let Err(error) = self.app_service.shutdown() {
+            tracing::error!("Failed to stop Cerberus mounts during shutdown: {error}");
+        }
+    }
+
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Check for theme changes
         let current_theme = self.app_service.read_state().settings.theme_preference;
@@ -126,11 +134,9 @@ impl eframe::App for MainWindow {
                 NavigationView::Dashboard => {
                     navigate_to_settings = self.dashboard_view.show(ui);
                 }
+                NavigationView::CloudDrives => self.cloud_drives_view.show(ui),
                 NavigationView::Settings => self.settings_view.show(ui),
                 NavigationView::Diagnostics => self.diagnostics_view.show(ui),
-                NavigationView::CloudDrives => {
-                    Self::show_placeholder_view(ui, "Cloud Drives", "Drive management")
-                }
                 NavigationView::GameLibrary => {
                     Self::show_placeholder_view(ui, "Game Library", "Game scanning and library")
                 }

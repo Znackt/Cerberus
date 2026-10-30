@@ -1,11 +1,14 @@
 use crate::app::state::AppState;
-use crate::domain::models::{AppDiagnostics, AppSettings, LibraryDiagnostics};
+use crate::domain::ids::DriveId;
+use crate::domain::models::{AppDiagnostics, AppSettings, DriveDefinition, LibraryDiagnostics};
 use crate::domain::status::{DiagnosticStatus, SettingsLoadStatus};
 use crate::domain::ThemePreference;
 use crate::error::{CerberusError, CerberusResult};
+use crate::mount::MountSupervisor;
 use crate::persistence::{AppPaths, SettingsLoadReport, SettingsStore};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::thread;
 use tokio::sync::oneshot;
 
 /// Commands for the settings worker thread.
@@ -22,13 +25,15 @@ enum SettingsCommand {
 /// Application service layer.
 ///
 /// This coordinates all operations and owns the core application state.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppService {
     paths: AppPaths,
     settings_store: SettingsStore,
     state: Arc<RwLock<AppState>>,
     settings_cmd_tx: std::sync::mpsc::Sender<SettingsCommand>,
     settings_ready: Arc<(Mutex<bool>, Condvar)>,
+    mount_supervisor: Arc<MountSupervisor>,
+    winfsp_status: Arc<Mutex<DiagnosticStatus>>,
 }
 
 impl AppService {
@@ -43,6 +48,8 @@ impl AppService {
         let settings_store = paths.settings_store();
         let state = Arc::new(RwLock::new(AppState::default()));
         let settings_ready = Arc::new((Mutex::new(false), Condvar::new()));
+        let mount_supervisor = Arc::new(MountSupervisor::new());
+        let winfsp_status = Arc::new(Mutex::new(DiagnosticStatus::NotChecked));
 
         // Channel for settings commands
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<SettingsCommand>();
@@ -52,13 +59,32 @@ impl AppService {
         let ready_clone = Arc::clone(&settings_ready);
         let settings_path = paths.settings_path.clone();
         let settings_store_for_worker = SettingsStore::new(settings_path.clone());
+        let mount_supervisor_clone = Arc::clone(&mount_supervisor);
+        let paths_clone = paths.clone();
+        let winfsp_status_clone = Arc::clone(&winfsp_status);
 
         std::thread::spawn(move || {
+            // Initialize rclone on background thread
+            let _ = mount_supervisor_clone.init_rclone();
+            if let Ok(status) = crate::cloud::winfsp::WinFspChecker::check() {
+                if let Ok(mut cached) = winfsp_status_clone.lock() {
+                    *cached = match status {
+                        crate::cloud::winfsp::WinFspStatus::Available => {
+                            DiagnosticStatus::Available
+                        }
+                        crate::cloud::winfsp::WinFspStatus::NotFound => {
+                            DiagnosticStatus::NotAvailable
+                        }
+                    };
+                }
+            }
+            // Set paths for mount supervisor
+            mount_supervisor_clone.set_paths(paths_clone);
             // Load settings off the UI thread, then publish them atomically with
             // the readiness flag. Views must not infer first-run state before this.
             let load_report = settings_store_for_worker.load_with_status();
             if let Ok(mut state_guard) = state_clone.write() {
-                state_guard.settings = load_report.settings;
+                state_guard.settings = load_report.settings.clone();
                 state_guard.settings_loaded = true;
                 state_guard.settings_load_status = load_report.status;
             }
@@ -68,6 +94,19 @@ impl AppService {
                 ready_cv.notify_all();
             }
             tracing::info!("Settings loaded from {}", settings_path.display());
+
+            // Handle auto-mount if enabled
+            if load_report.settings.restore_drives_on_startup {
+                for drive in &load_report.settings.drives {
+                    if drive.auto_mount {
+                        let drive_clone = drive.clone();
+                        let supervisor_clone = mount_supervisor_clone.clone();
+                        thread::spawn(move || {
+                            let _ = supervisor_clone.mount(drive_clone);
+                        });
+                    }
+                }
+            }
 
             // Process persistence commands on this worker thread.
             while let Ok(cmd) = cmd_rx.recv() {
@@ -94,6 +133,8 @@ impl AppService {
             state,
             settings_cmd_tx: cmd_tx,
             settings_ready,
+            mount_supervisor,
+            winfsp_status,
         }
     }
 
@@ -271,6 +312,19 @@ impl AppService {
 
     /// Get diagnostics information.
     pub fn get_diagnostics(&self) -> AppDiagnostics {
+        // Note: Can't access private fields directly, so we check via mount status
+        let rclone_available = match self.mount_supervisor.get_rclone_status() {
+            Some(true) => DiagnosticStatus::Available,
+            Some(false) => DiagnosticStatus::NotAvailable,
+            None => DiagnosticStatus::NotChecked,
+        };
+
+        let winfsp_available = self
+            .winfsp_status
+            .lock()
+            .map(|status| *status)
+            .unwrap_or(DiagnosticStatus::Error);
+
         AppDiagnostics {
             version: env!("CARGO_PKG_VERSION").to_string(),
             settings_load_status: self.read_state().settings_load_status.clone(),
@@ -278,8 +332,8 @@ impl AppService {
             cache_root_path: Some(self.paths.cache_root.clone()),
             settings_file_path: Some(self.paths.settings_path.clone()),
             log_directory: Some(self.paths.log_directory.clone()),
-            rclone_available: DiagnosticStatus::NotChecked,
-            winfsp_available: DiagnosticStatus::NotChecked,
+            rclone_available,
+            winfsp_available,
             dependencies: vec![],
         }
     }
@@ -316,6 +370,114 @@ impl AppService {
         })?;
         tracing::info!("Reset to first-run state");
         Ok(())
+    }
+
+    // Phase 2 - Drive Management
+
+    /// List all saved drive definitions from settings.
+    pub fn list_saved_drives(&self) -> Vec<DriveDefinition> {
+        self.read_state().settings.drives.clone()
+    }
+
+    /// Add a new drive definition to settings.
+    pub fn add_drive_definition(&self, definition: DriveDefinition) -> CerberusResult<()> {
+        self.update_settings(|settings| {
+            settings.drives.push(definition);
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    /// Update an existing drive definition.
+    pub fn update_drive_definition(
+        &self,
+        id: DriveId,
+        mut updated: DriveDefinition,
+    ) -> CerberusResult<()> {
+        updated.id = id;
+        self.update_settings(move |settings| {
+            if let Some(existing) = settings.drives.iter_mut().find(|d| d.id == id) {
+                *existing = updated;
+            }
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    /// Remove a drive definition from settings.
+    pub fn remove_drive_definition(&self, id: DriveId) -> CerberusResult<()> {
+        self.update_settings(move |settings| {
+            settings.drives.retain(|d| d.id != id);
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    /// Update the restore drives on startup setting.
+    pub fn set_restore_drives_on_startup(&self, enabled: bool) -> CerberusResult<()> {
+        self.update_settings(move |settings| {
+            settings.restore_drives_on_startup = enabled;
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    // Mount operations
+
+    /// Initialize rclone client
+    pub fn init_rclone(&self) -> CerberusResult<()> {
+        self.mount_supervisor.init_rclone()
+    }
+
+    pub fn refresh_dependencies(&self) -> CerberusResult<()> {
+        self.mount_supervisor.init_rclone()?;
+        let status = match crate::cloud::winfsp::WinFspChecker::check() {
+            Ok(crate::cloud::winfsp::WinFspStatus::Available) => DiagnosticStatus::Available,
+            Ok(crate::cloud::winfsp::WinFspStatus::NotFound) => DiagnosticStatus::NotAvailable,
+            Err(error) => return Err(error),
+        };
+        *self
+            .winfsp_status
+            .lock()
+            .map_err(|_| CerberusError::config("Dependency status lock poisoned"))? = status;
+        Ok(())
+    }
+
+    /// Mount a drive
+    pub fn mount_drive(&self, definition: DriveDefinition) -> CerberusResult<()> {
+        self.mount_supervisor.mount(definition)
+    }
+
+    pub fn list_rclone_remotes(&self) -> CerberusResult<Vec<crate::cloud::rclone::RemoteInfo>> {
+        self.mount_supervisor.list_remotes()
+    }
+
+    pub fn test_rclone_remote(&self, name: &str, path: &str) -> CerberusResult<()> {
+        self.mount_supervisor.test_remote(name, path)
+    }
+
+    pub fn launch_rclone_config(&self) -> CerberusResult<()> {
+        self.mount_supervisor.launch_rclone_config()
+    }
+
+    /// Unmount a drive
+    pub fn unmount_drive(&self, id: &DriveId) -> CerberusResult<()> {
+        self.mount_supervisor.unmount(id)
+    }
+
+    /// Get mount status for a drive
+    pub fn get_mount_status(&self, id: &DriveId) -> Option<crate::domain::status::MountStatus> {
+        self.mount_supervisor.get_status(id)
+    }
+
+    /// Get all active mount sessions
+    pub fn active_mount_sessions(&self) -> Vec<crate::domain::models::DriveSession> {
+        self.mount_supervisor.active_sessions()
+    }
+
+    /// Shutdown all mounts
+    pub fn shutdown(&self) -> CerberusResult<()> {
+        self.mount_supervisor.shutdown()
     }
 }
 

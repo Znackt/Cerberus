@@ -1,5 +1,7 @@
-use crate::domain::models::AppSettings;
+use crate::domain::ids::DriveId;
+use crate::domain::models::{AppSettings, DriveSession};
 use crate::domain::status::SettingsLoadStatus;
+use std::collections::HashMap;
 
 /// Application state (not UI-specific).
 #[derive(Debug, Clone, Default)]
@@ -8,9 +10,7 @@ pub struct AppState {
     /// False until the background settings load has completed.
     pub settings_loaded: bool,
     pub settings_load_status: SettingsLoadStatus,
-    // Future fields will be added in later phases:
-    // pub drives: HashMap<DriveId, DriveSession>,
-    // pub games: HashMap<GameId, GameEntry>,
+    pub active_drives: HashMap<DriveId, DriveSession>,
 }
 
 impl AppState {

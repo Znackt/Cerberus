@@ -2,7 +2,7 @@
 
 Cerberus is an early-stage Windows desktop application foundation for managing cloud-hosted game files through a local storage workflow. It is written in Rust and uses egui for its native desktop interface.
 
-> **Status:** The current build provides the application shell, local settings, first-run setup, and diagnostics. Cloud connections, virtual drive mounting, game scanning and launching, cache execution, and predictive prefetching are not implemented yet.
+> **Status:** Phase 2 is fully implemented and verified. Cerberus supports real cloud drive configuration, remote discovery, connection testing, WinFsp/rclone integration, virtual drive mounting, unmounting, auto-mount, and startup restoration.
 
 ## What works today
 
@@ -12,6 +12,9 @@ Cerberus is an early-stage Windows desktop application foundation for managing c
 - Settings loading and saving handled by a background worker so persistence I/O does not run in the immediate-mode UI update.
 - Diagnostics for application paths, settings load state, and recent log entries.
 - Structured Rust modules that separate UI, application services, domain types, persistence, and errors.
+- **Real cloud drive configuration using rclone and WinFsp.**
+- **Virtual drive mounting, unmounting, and auto-mount on startup.**
+- **Automatic cleanup of mount processes and drive letter release.**
 
 See [Features and status](docs/FEATURES.md) for the implemented behavior and current limitations.
 

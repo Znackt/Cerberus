@@ -78,11 +78,17 @@ impl DiagnosticsView {
 
             ui.horizontal(|ui| {
                 ui.label("rclone:");
-                ui.colored_label(Color32::LIGHT_GRAY, "Not checked in Phase 1");
+                ui.colored_label(
+                    status_color(diagnostics.rclone_available),
+                    diagnostics.rclone_available.to_string(),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("WinFsp:");
-                ui.colored_label(Color32::LIGHT_GRAY, "Not checked in Phase 1");
+                ui.colored_label(
+                    status_color(diagnostics.winfsp_available),
+                    diagnostics.winfsp_available.to_string(),
+                );
             });
         });
 
@@ -320,6 +326,15 @@ impl DiagnosticsView {
                 ui.monospace("Release (MSVC)");
             });
         });
+    }
+}
+
+fn status_color(status: crate::domain::status::DiagnosticStatus) -> Color32 {
+    match status {
+        crate::domain::status::DiagnosticStatus::Available => Color32::LIGHT_GREEN,
+        crate::domain::status::DiagnosticStatus::NotAvailable => Color32::LIGHT_RED,
+        crate::domain::status::DiagnosticStatus::Error => Color32::YELLOW,
+        crate::domain::status::DiagnosticStatus::NotChecked => Color32::LIGHT_GRAY,
     }
 }
 

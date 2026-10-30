@@ -160,20 +160,25 @@ pub struct DriveDefinition {
     pub remote_name: String,
     pub remote_path: String,
     pub drive_letter: Option<String>,
-    pub permanent: bool,
     pub auto_mount: bool,
+    pub permanent: bool,
 }
 
 impl DriveDefinition {
-    pub fn new(display_name: DisplayName, remote_name: String, remote_path: String) -> Self {
+    pub fn new(
+        display_name: DisplayName,
+        remote_name: String,
+        remote_path: String,
+        drive_letter: Option<String>,
+    ) -> Self {
         Self {
             id: DriveId::new(),
             display_name,
             remote_name,
             remote_path,
-            drive_letter: None,
-            permanent: false,
+            drive_letter,
             auto_mount: false,
+            permanent: false,
         }
     }
 }

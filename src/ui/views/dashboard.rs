@@ -23,11 +23,17 @@ impl DashboardView {
         ui.add_space(16.0);
 
         // Status cards
+        let mounted_count = self
+            .app_service
+            .active_mount_sessions()
+            .iter()
+            .filter(|session| session.status == crate::domain::status::MountStatus::Mounted)
+            .count();
         ui.columns(3, |columns| {
             self.show_card(
                 &mut columns[0],
                 "Cloud Drives",
-                "No drives mounted. Drive support is planned for a later phase.",
+                &format!("{mounted_count} drive(s) mounted. Configure and manage cloud drives in Cloud Drives."),
             );
             self.show_card(
                 &mut columns[1],
@@ -65,7 +71,10 @@ impl DashboardView {
 
         ui.add_space(14.0);
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new("Phase 1 · Foundation").color(Color32::from_rgb(130, 170, 255)));
+            ui.label(
+                RichText::new("Phase 2 · Cloud drive integration")
+                    .color(Color32::from_rgb(130, 170, 255)),
+            );
         });
         open_settings
     }

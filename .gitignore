@@ -1,14 +1,25 @@
-/target/
-/dist/
-.env
-.env.*
-!.env.example
-*.log
-*.tmp
-*.bak
-*.backup
-.DS_Store
-Thumbs.db
-desktop.ini
-.idea/
+# Binaries and build artifacts
+/target
+*.exe
+*.pdb
+*.rlib
+*.d
+*.o
+
+# IDE and editor files
 .vscode/
+.idea/
+.DS_Store
+
+# Application data (logs, settings, cache)
+# Do not track local user data
+/Cerberus
+*.log
+settings.json
+logs/
+cache/
+data/
+
+# OS junk
+Thumbs.db
+Desktop.ini

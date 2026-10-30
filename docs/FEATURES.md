@@ -17,11 +17,8 @@ This page describes the behavior present in the source today. Navigation entries
 
 ## Not implemented yet
 
-- Cloud-provider account setup, authentication, and remote file operations.
-- Virtual drive creation/mounting or automatic drive restoration.
-- Game discovery, library editing, and launching.
-- Cache population, eviction, and runtime performance monitoring.
-- Predictive file access, prefetching, and background agents.
-- Dependency detection for tools such as rclone or WinFsp.
+| Cloud Drive Configuration | Implemented | Configure remotes with rclone, test connections asynchronously, and manage drive definitions. |
+| Virtual Drive Mounting | Implemented | Mount/unmount using rclone and WinFsp with process supervision, auto-mount, and startup restoration. |
+| Dependency Management | Implemented | Detects rclone and WinFsp installations, reports status in diagnostics. |
 
 The settings model contains fields reserved for later phases. Their presence does not mean the corresponding runtime capability is active.
